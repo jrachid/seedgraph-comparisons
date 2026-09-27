@@ -1,8 +1,7 @@
 """Measure what polyfactory gives on a User <- Post <- Comment schema, next to seedgraph."""
 
-from polyfactory import Ignore
 from polyfactory.factories.sqlalchemy_factory import SQLAlchemyFactory
-from sqlalchemy import ForeignKey, create_engine, event
+from sqlalchemy import ForeignKey, create_engine, event, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 
@@ -45,24 +44,16 @@ class PostFactory(SQLAlchemyFactory[Post]):
     __set_relationships__ = True
 
 
-def register_the_workaround() -> type[SQLAlchemyFactory[Post]]:
-    """Declare one factory per model with its keys ignored; the User and Comment ones become the defaults."""
+class PostWithoutKeysFactory(SQLAlchemyFactory[Post]):
+    __set_primary_key__ = False
 
-    class UserWithoutIdFactory(SQLAlchemyFactory[User]):
-        __set_as_default_factory_for_type__ = True
-        id = Ignore()
 
-    class CommentWithoutIdFactory(SQLAlchemyFactory[Comment]):
-        __set_as_default_factory_for_type__ = True
-        id = Ignore()
-        post_id = Ignore()
+class UserWithoutKeysFactory(SQLAlchemyFactory[User]):
+    __set_primary_key__ = False
 
-    class PostWithoutIdFactory(SQLAlchemyFactory[Post]):
-        __set_relationships__ = True
-        id = Ignore()
-        author_id = Ignore()
 
-    return PostWithoutIdFactory
+class CommentWithoutKeysFactory(SQLAlchemyFactory[Comment]):
+    __set_primary_key__ = False
 
 
 def new_session() -> Session:
@@ -113,17 +104,25 @@ def main() -> None:
         print(f"polyfactory, {count} posts: {failures}/{RUNS} runs fail with IntegrityError")
     assert failed_runs(lambda session: session.add_all(PostFactory.batch(200))) > RUNS * 0.9
 
-    PostWithoutIdFactory = register_the_workaround()
-    workaround = failed_runs(lambda session: session.add_all(PostWithoutIdFactory.batch(200)))
-    print(f"polyfactory with id = Ignore() on every factory, 200 posts: {workaround}/{RUNS} runs fail")
-    assert workaround == 0
+    one_line_fix = failed_runs(lambda session: session.add_all(PostWithoutKeysFactory.batch(200)))
+    print(f"polyfactory with __set_primary_key__ = False, 200 posts: {one_line_fix}/{RUNS} runs fail")
+    assert one_line_fix == 0
+
     with new_session() as session:
-        posts = PostWithoutIdFactory.batch(6)
-        session.add_all(posts)
+        users = [
+            UserWithoutKeysFactory.build(
+                posts=[PostWithoutKeysFactory.build(comments=CommentWithoutKeysFactory.batch(5)) for _ in range(2)]
+            )
+            for _ in range(3)
+        ]
+        session.add_all(users)
         session.commit()
-        authors = len({post.author_id for post in posts})
-    print(f"polyfactory, 6 posts: {authors} distinct authors")
-    assert authors == 6
+        rows = [session.scalar(select(func.count()).select_from(model)) for model in (User, Post, Comment)]
+        per_user = [len(user.posts) for user in users]
+        per_post = [len(post.comments) for user in users for post in user.posts]
+        linked = all(post.author_id == user.id for user in users for post in user.posts)
+    print(f"polyfactory built top-down, 3 x 2 x 5: rows {rows}, posts per user {per_user}, comments per post {per_post}, links right: {linked}")
+    assert rows == [3, 6, 30] and per_user == [2, 2, 2] and per_post == [5] * 6 and linked
 
     seeded = failed_runs(lambda session: seed(session, User, user=50, post=4, post__comment=1))
     print(f"seedgraph, 50 users x 4 posts: {seeded}/{RUNS} runs fail")

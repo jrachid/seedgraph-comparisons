@@ -14,9 +14,11 @@ Each script prints what it measured and asserts the claim: if a new release chan
 
 ## Results — 27 September 2026, Python 3.12, SQLAlchemy 2.1.1 unless stated
 
+The polyfactory row was remeasured the same day, after reading its configuration options: an earlier version described a heavier workaround than the one-line fix.
+
 | Library | Measured | Script |
 | --- | --- | --- |
-| polyfactory 3.3.0 | In memory, `post.author_id` disagrees with `post.author.id`; once written, SQLAlchemy syncs them and every link is right. Primary keys are drawn at random, so writing 50 posts fails with `IntegrityError` in 27 to 36 runs out of 100, 100 posts in 78 to 81, 200 posts in every run. With `id = Ignore()` on a factory per model: 0 failures, and 6 posts get 6 distinct authors. seedgraph, 50 users × 4 posts: 0 failures in 100 runs. | [`polyfactory/measure.py`](polyfactory/measure.py) |
+| polyfactory 3.3.0 | In memory, `post.author_id` disagrees with `post.author.id`; once written, SQLAlchemy syncs them and every link is right. By default primary keys are drawn at random, so writing 50 posts fails with `IntegrityError` in 27 to 36 runs out of 100, 100 posts in 76 to 81, 200 posts in every run. One line fixes it: `__set_primary_key__ = False` gives 0 failures, nested authors and comments included. Built top-down (`UserFactory.build(posts=[...])`), 3 users × 2 posts × 5 comments comes out exact, links right. seedgraph, 50 users × 4 posts: 0 failures in 100 runs. | [`polyfactory/measure.py`](polyfactory/measure.py) |
 | faker-sqlalchemy 0.10.2208140 (SQLAlchemy 1.4.54) | With `generate_related=True`: `RecursionError` on a `backref` relationship and on a self-referential FK, none on a one-way relationship. A foreign key passed alone in overrides is kept; combined with `generate_related`, it is replaced by a generated parent. | [`faker-sqlalchemy/measure.py`](faker-sqlalchemy/measure.py) |
 | sqlalchemyseed 2.6.1 | Loaders for CSV, JSON and YAML; no import of faker, random or mimesis: it writes the data you give it. | [`sqlalchemyseed/measure.py`](sqlalchemyseed/measure.py) |
 | sqlseed 0.2.4 | One count per table; with the `coverage` strategy, 6 posts over 3 users give exactly 2 each and 30 comments over 6 posts exactly 5 each. | [`sqlseed/measure.py`](sqlseed/measure.py) |

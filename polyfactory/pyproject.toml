@@ -1,0 +1,9 @@
+[project]
+name = "compare-polyfactory"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "polyfactory==3.3.0",
+    "seedgraph==0.1.4",
+    "sqlalchemy==2.1.1",
+]

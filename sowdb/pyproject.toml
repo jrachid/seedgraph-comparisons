@@ -1,0 +1,8 @@
+[project]
+name = "compare-sowdb"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "sowdb==0.3.0",
+    "sqlalchemy==2.1.1",
+]

@@ -1,0 +1,8 @@
+[project]
+name = "compare-faker-sqlalchemy"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "faker-sqlalchemy==0.10.2208140",
+    "sqlalchemy==1.4.54",
+]
